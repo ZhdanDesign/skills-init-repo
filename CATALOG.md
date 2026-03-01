@@ -85,38 +85,16 @@
 ## Communication — Коммуникации
 
 ```yaml
-- id: messaging
-  name: Messaging
-  category: communication
-  description: Отправка сообщений — Telegram, WhatsApp, Discord, Slack, Signal
-  platforms: [openclaw]
-  requires: []
-  provides: [messaging, notifications, alerts]
-  priority: high
-  source: local
-  path: skills/communication/messaging/SKILL.md
-
-- id: email
-  name: Email
-  category: communication
-  description: Работа с email — Gmail, IMAP, отправка, чтение, поиск
-  platforms: [generic]
-  requires: []
-  provides: [email, gmail, imap]
-  priority: medium
-  source: local
-  path: skills/communication/email/SKILL.md
-
-- id: imessage
+- id: imsg
   name: iMessage
   category: communication
-  description: iMessage/SMS на macOS — чтение, отправка, поиск
+  description: iMessage/SMS на macOS — чтение, отправка, поиск чатов
   platforms: [openclaw]
   requires: []
   provides: [imessage, sms, macos]
   priority: medium
   source: local
-  path: skills/communication/imessage/SKILL.md
+  path: skills/communication/imsg/SKILL.md
 ```
 
 ---
@@ -135,21 +113,10 @@
   source: local
   path: skills/research/web-search/SKILL.md
 
-- id: web-scrape
-  name: Web Scraping
-  category: research
-  description: Извлечение контента с веб-страниц
-  platforms: [generic]
-  requires: []
-  provides: [scraping, extraction, content]
-  priority: medium
-  source: local
-  path: skills/research/web-scrape/SKILL.md
-
 - id: summarize
   name: Summarize
   category: research
-  description: Summarization текстов, видео, подкастов
+  description: Summarization текстов, видео, подкастов, URL
   platforms: [generic]
   requires: []
   provides: [summarization, extraction, transcripts]
@@ -206,81 +173,28 @@
   priority: medium
   source: local
   path: skills/automation/cron/SKILL.md
-```
 
----
-
-## Creative — Креатив
-
-```yaml
-- id: visual-explainer
-  name: Visual Explainer
-  category: creative
-  description: Генерация HTML диаграмм с Mermaid
+- id: coding-agent
+  name: Coding Agent
+  category: automation
+  description: Делегирование кодинга Codex, Claude Code, Pi agents
   platforms: [generic]
   requires: []
-  provides: [diagrams, visualization, html]
+  provides: [coding, delegation, agents]
+  priority: high
+  source: local
+  path: skills/automation/coding-agent/SKILL.md
+
+- id: healthcheck
+  name: Healthcheck
+  category: automation
+  description: Host security hardening и risk-tolerance configuration
+  platforms: [openclaw]
+  requires: []
+  provides: [security, hardening, monitoring]
   priority: medium
   source: local
-  path: skills/creative/visual-explainer/SKILL.md
-
-- id: tts
-  name: Text-to-Speech
-  category: creative
-  description: Озвучка текста — ElevenLabs, OpenAI, локальные
-  platforms: [generic]
-  requires: []
-  provides: [speech, audio, voice]
-  priority: low
-  source: local
-  path: skills/creative/tts/SKILL.md
-
-- id: image-gen
-  name: Image Generation
-  category: creative
-  description: Генерация изображений — DALL-E, Midjourney, Stable Diffusion
-  platforms: [generic]
-  requires: []
-  provides: [images, generation, art]
-  priority: low
-  source: local
-  path: skills/creative/image-gen/SKILL.md
-```
-
----
-
-## External Sources — Внешние источники
-
-```yaml
-# ClawHub — каталог skills для OpenClaw
-- id: clawhub-catalog
-  name: ClawHub
-  category: external
-  description: Каталог навыков для OpenClaw
-  platforms: [openclaw]
-  source: url
-  path: https://clawhub.com/api/catalog.json
-  format: clawhub
-
-# AgenticSkills — curated skills для coding agents
-- id: agentic-skills
-  name: AgenticSkills
-  category: external
-  description: 143+ curated skills для Claude Code, Codex, Cursor
-  platforms: [opencode, codex, claude, cursor]
-  source: url
-  path: https://agenticskills.io/catalog.json
-  format: agenticskills
-
-# MCP Ecosystem — MCP servers
-- id: mcp-servers
-  name: MCP Servers
-  category: external
-  description: 8000+ MCP servers
-  platforms: [claude, cursor, windsurf]
-  source: url
-  path: https://findmcp.dev/api/servers.json
-  format: mcp
+  path: skills/automation/healthcheck/SKILL.md
 ```
 
 ---
@@ -296,17 +210,41 @@
 - id: preset-developer
   name: Developer
   description: Для разработчика
-  includes: [master-init, git, github-integration, coding-style, memory-management, web-search, shell-exec, mcp]
+  includes: [master-init, git, github-integration, coding-style, memory-management, web-search, shell-exec, mcp, coding-agent]
 
 - id: preset-assistant
   name: Personal Assistant
   description: Персональный ассистент
-  includes: [master-init, git, memory-management, messaging, email, web-search, cron, tts]
+  includes: [master-init, git, memory-management, imsg, web-search, summarize, healthcheck]
 
 - id: preset-researcher
   name: Researcher
   description: Для исследований
-  includes: [master-init, git, memory-management, web-search, web-scrape, summarize]
+  includes: [master-init, git, memory-management, web-search, summarize]
+```
+
+---
+
+## External Sources — Внешние источники
+
+```yaml
+# ClawHub — каталог skills для OpenClaw
+- id: clawhub-catalog
+  name: ClawHub
+  category: external
+  description: Каталог навыков для OpenClaw (clawhub.com)
+  platforms: [openclaw]
+  source: url
+  path: https://clawhub.com/api/catalog.json
+
+# AgenticSkills — curated skills для coding agents
+- id: agentic-skills
+  name: AgenticSkills
+  category: external
+  description: 143+ curated skills для Claude Code, Codex, Cursor
+  platforms: [opencode, codex, claude, cursor]
+  source: url
+  path: https://agenticskills.io/catalog.json
 ```
 
 ---
