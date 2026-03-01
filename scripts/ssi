@@ -1,0 +1,493 @@
+#!/usr/bin/env bash
+#
+# ssi - Start Skills Init
+# Универсальный CLI для инициализации навыков агентных систем
+#
+# Usage:
+#   ssi <platform> [options]
+#   ssi auto                    # Автоопределение платформы
+#   ssi openclaw --preset dev   # Инициализировать OpenClaw с preset
+#   ssi opencode --teacher pi   # Делегировать учителю pi
+#
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Defaults
+REPO_URL="https://raw.githubusercontent.com/YOUR/skills-init-repo/main"
+REPO_LOCAL="$HOME/.openclaw/workspace/skills-init-repo"
+PRESET="minimal"
+TEACHER=""
+ANALYZE_ONLY=false
+VERBOSE=false
+
+# ============================================
+# Helper Functions
+# ============================================
+
+log_info() { echo -e "${BLUE}ℹ${NC} $1"; }
+log_ok() { echo -e "${GREEN}✓${NC} $1"; }
+log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+log_error() { echo -e "${RED}✗${NC} $1"; }
+log_step() { echo -e "${CYAN}→${NC} $1"; }
+
+show_help() {
+    cat << 'EOF'
+ssi - Start Skills Init
+
+Инициализация навыков для агентных систем одной командой.
+
+USAGE:
+    ssi <platform> [options]
+
+PLATFORMS:
+    auto        Автоопределение платформы
+    openclaw    OpenClaw
+    opencode    OpenCode CLI
+    codex       OpenAI Codex
+    claude      Claude Code
+    generic     Универсальный (минимальные требования)
+
+OPTIONS:
+    --preset <name>     Preset навыков (minimal|developer|assistant|researcher)
+                        Default: minimal
+    --teacher <name>    Делегировать учителю (pi|opencode|codex|claude|gemini|ollama)
+    --analyze           Только анализ, не устанавливать
+    --local             Использовать локальный репозиторий
+    --verbose           Подробный вывод
+    -h, --help          Показать справку
+
+EXAMPLES:
+    ssi auto                        # Автоопределение + preset minimal
+    ssi openclaw --preset developer # OpenClaw + developer preset
+    ssi opencode --teacher pi       # Делегировать pi
+    ssi auto --analyze              # Только анализ
+
+REPOSITORY:
+    Локальный: ~/.openclaw/workspace/skills-init-repo
+    GitHub: https://github.com/YOUR/skills-init-repo
+
+EOF
+    exit 0
+}
+
+# ============================================
+# Platform Detection
+# ============================================
+
+detect_platform() {
+    log_step "Определение платформы..."
+    
+    if [[ -n "$OPENCLAW_VERSION" ]] || [[ -d "$HOME/.openclaw" ]]; then
+        echo "openclaw"
+        return
+    fi
+    
+    if [[ -n "$OPENCODE_VERSION" ]] || [[ -d "$HOME/.config/opencode" ]]; then
+        echo "opencode"
+        return
+    fi
+    
+    if which codex &>/dev/null; then
+        echo "codex"
+        return
+    fi
+    
+    if which claude &>/dev/null; then
+        echo "claude"
+        return
+    fi
+    
+    echo "generic"
+}
+
+# ============================================
+# Teacher Detection
+# ============================================
+
+detect_teachers() {
+    local teachers=()
+    
+    which pi &>/dev/null && teachers+=("pi")
+    which opencode &>/dev/null && teachers+=("opencode")
+    which codex &>/dev/null && teachers+=("codex")
+    which claude &>/dev/null && teachers+=("claude")
+    which gemini &>/dev/null && teachers+=("gemini")
+    
+    # Ollama check
+    curl -s http://localhost:11434/api/tags &>/dev/null && teachers+=("ollama")
+    
+    echo "${teachers[@]}"
+}
+
+get_best_teacher() {
+    local teachers=$(detect_teachers)
+    local priority=(pi opencode codex claude gemini ollama)
+    
+    for t in "${priority[@]}"; do
+        if [[ " ${teachers} " =~ " ${t} " ]]; then
+            echo "$t"
+            return
+        fi
+    done
+    
+    echo ""
+}
+
+# ============================================
+# Catalog Parsing
+# ============================================
+
+get_catalog() {
+    local catalog_file
+    
+    if [[ "$USE_LOCAL" == "true" ]]; then
+        catalog_file="$REPO_LOCAL/CATALOG.md"
+    else
+        catalog_file=$(mktemp)
+        curl -s "$REPO_URL/CATALOG.md" -o "$catalog_file"
+    fi
+    
+    echo "$catalog_file"
+}
+
+parse_preset() {
+    local preset=$1
+    local catalog=$2
+    
+    # Find the specific preset block and extract includes
+    # Use awk for more precise matching
+    awk "
+        /- id: preset-$preset/ { found=1; next }
+        found && /^- id: preset-/ { exit }
+        found && /includes:/ {
+            gsub(/includes: \[|\]/, \"\")
+            split(\$0, arr, \",\")
+            for (i in arr) {
+                gsub(/^[ \t]+|[ \t]+$/, \"\", arr[i])
+                if (arr[i] != \"\") print arr[i]
+            }
+            exit
+        }
+    " "$catalog" | sort -u
+}
+
+# ============================================
+# Skill Installation
+# ============================================
+
+install_skill_openclaw() {
+    local skill_id=$1
+    local catalog=$2
+    
+    log_step "Установка $skill_id для OpenClaw..."
+    
+    # Check if ClawHub
+    local clawhub_slug=$(grep -A 20 "id: $skill_id" "$catalog" | grep "clawhub:" | awk '{print $2}')
+    
+    if [[ -n "$clawhub_slug" ]]; then
+        clawhub install "$clawhub_slug" --workdir ~/.openclaw/workspace
+        log_ok "Установлен через ClawHub: $clawhub_slug"
+        return
+    fi
+    
+    # Local skill
+    local skill_path="$REPO_LOCAL/skills/$skill_id"
+    if [[ -d "$skill_path" ]]; then
+        cp -r "$skill_path" ~/.openclaw/workspace/skills/
+        log_ok "Скопирован локально: $skill_id"
+    else
+        log_warn "Навык не найден: $skill_id"
+    fi
+}
+
+install_skill_opencode() {
+    local skill_id=$1
+    local catalog=$2
+    
+    log_step "Установка $skill_id для OpenCode..."
+    
+    local skill_path="$REPO_LOCAL/skills/$skill_id"
+    if [[ -d "$skill_path" ]]; then
+        mkdir -p ~/.config/opencode/skills/
+        cp -r "$skill_path" ~/.config/opencode/skills/
+        log_ok "Скопирован: $skill_id"
+    else
+        log_warn "Навык не найден: $skill_id"
+    fi
+}
+
+# ============================================
+# Memory Setup
+# ============================================
+
+setup_memory_openclaw() {
+    log_step "Настройка памяти OpenClaw..."
+    
+    mkdir -p ~/.openclaw/workspace/memory
+    
+    if [[ ! -f ~/.openclaw/workspace/MEMORY.md ]]; then
+        cat > ~/.openclaw/workspace/MEMORY.md << 'EOF'
+# MEMORY.md — Долгосрочная память
+
+## Инициализация
+- **Дата:** $(date +%Y-%m-%d)
+- **Платформа:** OpenClaw
+- **Preset:** $PRESET
+
+## Навыки
+<!-- Добавлять по мере установки -->
+
+## Контекст
+<!-- Важная информация для запоминания -->
+EOF
+        log_ok "Создан MEMORY.md"
+    fi
+    
+    # Today's memory file
+    local today=$(date +%Y-%m-%d)
+    if [[ ! -f ~/.openclaw/workspace/memory/$today.md ]]; then
+        touch ~/.openclaw/workspace/memory/$today.md
+        log_ok "Создан memory/$today.md"
+    fi
+}
+
+# ============================================
+# Teacher Delegation
+# ============================================
+
+delegate_to_teacher() {
+    local teacher=$1
+    local platform=$2
+    local preset=$3
+    
+    log_step "Делегирование учителю: $teacher"
+    
+    local prompt="Ты — учитель для агентной системы. Инициализируй навыки.
+
+1. Прочитай CATALOG.md: $REPO_LOCAL/CATALOG.md
+2. Платформа: $platform
+3. Preset: $preset
+4. Создай SKILL.md файлы для каждого навыка
+5. Организуй структуру директорий
+6. Создай MEMORY.md с базовым контекстом
+
+Выведи пошаговый план и выполни его."
+    
+    case $teacher in
+        pi)
+            pi "$prompt"
+            ;;
+        opencode)
+            opencode run "$prompt"
+            ;;
+        codex)
+            cd ~/.openclaw/workspace && codex exec "$prompt"
+            ;;
+        claude)
+            claude "$prompt"
+            ;;
+        gemini)
+            gemini "$prompt"
+            ;;
+        ollama)
+            ollama run llama3.2:3b "$prompt"
+            ;;
+        *)
+            log_error "Неизвестный учитель: $teacher"
+            exit 1
+            ;;
+    esac
+}
+
+# ============================================
+# Analysis Mode
+# ============================================
+
+analyze() {
+    local platform=$1
+    
+    echo ""
+    echo "═══════════════════════════════════════════════════════"
+    echo "               АНАЛИЗ СИСТЕМЫ"
+    echo "═══════════════════════════════════════════════════════"
+    echo ""
+    
+    # Platform
+    echo -e "${CYAN}Платформа:${NC} $platform"
+    
+    # Teachers
+    local teachers=$(detect_teachers)
+    if [[ -n "$teachers" ]]; then
+        echo -e "${CYAN}Учителя:${NC} ${teachers}"
+    else
+        echo -e "${CYAN}Учителя:${NC} ${YELLOW}не найдены${NC}"
+    fi
+    
+    # Best teacher
+    local best=$(get_best_teacher)
+    if [[ -n "$best" ]]; then
+        echo -e "${CYAN}Рекомендуемый учитель:${NC} $best"
+    fi
+    
+    # Catalog
+    local catalog=$(get_catalog)
+    echo -e "${CYAN}Каталог:${NC} $catalog"
+    
+    # Preset skills
+    local skills=$(parse_preset "$PRESET" "$catalog")
+    echo -e "${CYAN}Preset '$PRESET':${NC}"
+    for skill in $skills; do
+        echo "  • $skill"
+    done
+    
+    # Existing skills (platform-specific)
+    case $platform in
+        openclaw)
+            echo -e "${CYAN}Существующие навыки:${NC}"
+            ls ~/.openclaw/workspace/skills/ 2>/dev/null | head -10 || echo "  (пусто)"
+            ;;
+        opencode)
+            echo -e "${CYAN}Существующие навыки:${NC}"
+            ls ~/.config/opencode/skills/ 2>/dev/null | head -10 || echo "  (пусто)"
+            ;;
+    esac
+    
+    echo ""
+    echo "═══════════════════════════════════════════════════════"
+}
+
+# ============================================
+# Main Initialization
+# ============================================
+
+init_platform() {
+    local platform=$1
+    
+    log_info "Инициализация платформы: $platform"
+    log_info "Preset: $PRESET"
+    
+    # Get catalog
+    local catalog=$(get_catalog)
+    log_ok "Каталог загружен: $catalog"
+    
+    # Parse preset
+    local skills=$(parse_preset "$PRESET" "$catalog")
+    
+    if [[ -z "$skills" ]]; then
+        log_error "Preset '$PRESET' не найден или пуст"
+        exit 1
+    fi
+    
+    log_info "Навыки для установки:"
+    for skill in $skills; do
+        echo "  • $skill"
+    done
+    
+    # Install skills
+    for skill in $skills; do
+        case $platform in
+            openclaw)
+                install_skill_openclaw "$skill" "$catalog"
+                ;;
+            opencode)
+                install_skill_opencode "$skill" "$catalog"
+                ;;
+            *)
+                log_warn "Платформа $platform: установка навыков не реализована"
+                ;;
+        esac
+    done
+    
+    # Setup memory
+    case $platform in
+        openclaw)
+            setup_memory_openclaw
+            ;;
+    esac
+    
+    log_ok "Инициализация завершена!"
+    log_info "Перезапусти агентную систему для применения изменений"
+}
+
+# ============================================
+# CLI Parsing
+# ============================================
+
+# Parse arguments
+POSITIONAL_ARGS=()
+USE_LOCAL="true"  # Default to local
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            ;;
+        --preset)
+            PRESET="$2"
+            shift 2
+            ;;
+        --teacher)
+            TEACHER="$2"
+            shift 2
+            ;;
+        --analyze)
+            ANALYZE_ONLY=true
+            shift
+            ;;
+        --local)
+            USE_LOCAL="true"
+            shift
+            ;;
+        --remote)
+            USE_LOCAL="false"
+            shift
+            ;;
+        --verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -*)
+            log_error "Неизвестный флаг: $1"
+            exit 1
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+set -- "${POSITIONAL_ARGS[@]}"
+
+# Platform argument
+PLATFORM="${1:-auto}"
+
+# Auto-detect if needed
+if [[ "$PLATFORM" == "auto" ]]; then
+    PLATFORM=$(detect_platform)
+    log_info "Автоопределение: $PLATFORM"
+fi
+
+# ============================================
+# Main
+# ============================================
+
+if [[ "$ANALYZE_ONLY" == "true" ]]; then
+    analyze "$PLATFORM"
+    exit 0
+fi
+
+if [[ -n "$TEACHER" ]]; then
+    delegate_to_teacher "$TEACHER" "$PLATFORM" "$PRESET"
+    exit 0
+fi
+
+init_platform "$PLATFORM"
