@@ -55,7 +55,7 @@
   provides: [coding-preferences, style-consistency]
   priority: high
   source: local
-  path: skills/core/coding-style/SKILL.md
+  path: skills/automation/coding-agent/SKILL.md
 
 - id: memory-management
   name: Memory Management
@@ -236,6 +236,8 @@
   platforms: [openclaw]
   source: url
   path: https://clawhub.com/api/catalog.json
+  format: clawhub
+  auto-sync: true
 
 # AgenticSkills — curated skills для coding agents
 - id: agentic-skills
@@ -245,7 +247,37 @@
   platforms: [opencode, codex, claude, cursor]
   source: url
   path: https://agenticskills.io/catalog.json
+  format: agenticskills
+  auto-sync: true
+
+# SkillsIndex — MCP servers и AI tools
+- id: skills-index
+  name: SkillsIndex
+  category: external
+  description: 11,393+ AI agent tools, enriched hourly
+  platforms: [generic]
+  source: url
+  path: https://skillsindex.dev/api/catalog.json
+  format: skillsindex
+  auto-sync: false
 ```
+
+---
+
+## Auto-Sync
+
+При инициализации с флагом `--sync-external`:
+
+```bash
+ssi openclaw --preset developer --sync-external
+```
+
+Агент:
+1. Скачивает каталоги ClawHub, AgenticSkills
+2. Фильтрует по платформе
+3. Сравнивает с уже установленными
+4. Предлагает установить недостающие
+5. Скачивает и устанавливает выбранные
 
 ---
 

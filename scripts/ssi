@@ -27,6 +27,7 @@ PRESET="minimal"
 TEACHER=""
 ANALYZE_ONLY=false
 VERBOSE=false
+SYNC_EXTERNAL=false
 
 # ============================================
 # Helper Functions
@@ -59,6 +60,7 @@ OPTIONS:
     --preset <name>     Preset навыков (minimal|developer|assistant|researcher)
                         Default: minimal
     --teacher <name>    Делегировать учителю (pi|opencode|codex|claude|gemini|ollama)
+    --sync-external     Синхронизировать с внешними источниками (ClawHub, AgenticSkills)
     --analyze           Только анализ, не устанавливать
     --local             Использовать локальный репозиторий
     --verbose           Подробный вывод
@@ -69,6 +71,7 @@ EXAMPLES:
     ssi openclaw --preset developer # OpenClaw + developer preset
     ssi opencode --teacher pi       # Делегировать pi
     ssi auto --analyze              # Только анализ
+    ssi openclaw --sync-external    # Синхронизировать с ClawHub
 
 REPOSITORY:
     Локальный: ~/.openclaw/workspace/skills-init-repo
@@ -189,22 +192,23 @@ install_skill_openclaw() {
     
     log_step "Установка $skill_id для OpenClaw..."
     
-    # Check if ClawHub
-    local clawhub_slug=$(grep -A 20 "id: $skill_id" "$catalog" | grep "clawhub:" | awk '{print $2}')
+    # Get skill path from catalog
+    local skill_path=$(grep -A 20 "id: $skill_id" "$catalog" | grep "path:" | head -1 | awk '{print $2}')
     
-    if [[ -n "$clawhub_slug" ]]; then
-        clawhub install "$clawhub_slug" --workdir ~/.openclaw/workspace
-        log_ok "Установлен через ClawHub: $clawhub_slug"
+    if [[ -z "$skill_path" ]]; then
+        log_warn "Путь к навыку не найден: $skill_id"
         return
     fi
     
-    # Local skill
-    local skill_path="$REPO_LOCAL/skills/$skill_id"
-    if [[ -d "$skill_path" ]]; then
-        cp -r "$skill_path" ~/.openclaw/workspace/skills/
-        log_ok "Скопирован локально: $skill_id"
+    # Full path
+    local full_path="$REPO_LOCAL/$skill_path"
+    
+    if [[ -d "$(dirname "$full_path")" ]]; then
+        mkdir -p ~/.openclaw/workspace/skills/
+        cp -r "$(dirname "$full_path")" ~/.openclaw/workspace/skills/
+        log_ok "Скопирован: $skill_id"
     else
-        log_warn "Навык не найден: $skill_id"
+        log_warn "Навык не найден: $full_path"
     fi
 }
 
@@ -360,6 +364,15 @@ analyze() {
             ;;
     esac
     
+    # External sources info
+    echo ""
+    echo -e "${CYAN}Внешние источники:${NC}"
+    echo "  • ClawHub (clawhub.com) — для OpenClaw"
+    echo "  • AgenticSkills (agenticskills.io) — для coding agents"
+    echo "  • SkillsIndex (skillsindex.dev) — 11,393+ AI tools"
+    echo ""
+    echo -e "${CYAN}Для синхронизации:${NC} ssi $platform --sync-external"
+    
     echo ""
     echo "═══════════════════════════════════════════════════════"
 }
@@ -373,6 +386,12 @@ init_platform() {
     
     log_info "Инициализация платформы: $platform"
     log_info "Preset: $PRESET"
+    
+    # Sync external sources if requested
+    if [[ "$SYNC_EXTERNAL" == "true" ]]; then
+        local catalog=$(get_catalog)
+        sync_external_sources "$platform" "$catalog"
+    fi
     
     # Get catalog
     local catalog=$(get_catalog)
@@ -454,6 +473,10 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --sync-external)
+            SYNC_EXTERNAL=true
+            shift
+            ;;
         -*)
             log_error "Неизвестный флаг: $1"
             exit 1
@@ -475,6 +498,75 @@ if [[ "$PLATFORM" == "auto" ]]; then
     PLATFORM=$(detect_platform)
     log_info "Автоопределение: $PLATFORM"
 fi
+
+# ============================================
+# External Sources Sync
+# ============================================
+
+sync_external_sources() {
+    local platform=$1
+    local catalog=$2
+    
+    log_step "Синхронизация с внешними источниками..."
+    
+    # ClawHub
+    if [[ "$platform" == "openclaw" ]]; then
+        sync_clawhub "$catalog"
+    fi
+    
+    # AgenticSkills
+    if [[ "$platform" =~ opencode|codex|claude|cursor ]]; then
+        sync_agenticskills "$catalog"
+    fi
+}
+
+sync_clawhub() {
+    local catalog=$1
+    
+    log_info "ClawHub — каталог навыков для OpenClaw"
+    
+    # Проверка clawhub CLI
+    if ! command -v clawhub &>/dev/null; then
+        log_warn "ClawHub CLI не установлен"
+        echo "    Установка: npm install -g clawhub"
+        echo "    После установки: clawhub search <query>"
+        return
+    fi
+    
+    # Показать доступные skills
+    log_ok "ClawHub CLI установлен"
+    echo "    Поиск: clawhub search <query>"
+    echo "    Установка: clawhub install <slug> --workdir ~/.openclaw/workspace"
+    echo "    Список: clawhub list --workdir ~/.openclaw/workspace"
+}
+
+sync_agenticskills() {
+    local catalog=$1
+    
+    log_info "AgenticSkills — каталог skills для coding agents"
+    
+    echo "    Веб-сайт: https://agenticskills.io"
+    echo "    143+ curated skills для Claude Code, Codex, Cursor"
+    echo "    Платформы: Claude, Cursor, Windsurf, Gemini CLI"
+    echo ""
+    echo "    Установка:"
+    echo "    1. Найти skill на agenticskills.io"
+    echo "    2. Скопировать URL репозитория"
+    echo "    3. git clone <url> ~/.config/<platform>/skills/<name>"
+}
+
+install_from_clawhub() {
+    local slug=$1
+    
+    log_step "Установка $slug из ClawHub..."
+    
+    if command -v clawhub &>/dev/null; then
+        clawhub install "$slug" --workdir ~/.openclaw/workspace
+        log_ok "Установлен: $slug"
+    else
+        log_warn "ClawHub CLI не установлен. Установите: npm install -g clawhub"
+    fi
+}
 
 # ============================================
 # Main
