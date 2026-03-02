@@ -260,6 +260,17 @@
   path: https://skillsindex.dev/api/catalog.json
   format: skillsindex
   auto-sync: false
+
+# Universal Agent Context Kit — модульный контекст-инжиниринг
+- id: universal-agent-context-kit
+  name: Universal Agent Context Kit
+  category: external
+  description: Универсальный toolkit для внедрения modular context engineering (core + scoped + validators + metrics) в Codex, Claude, OpenClaw, Pi, OpenCode и другие агенты
+  platforms: [generic]
+  source: github
+  path: https://github.com/ZhdanDesign/universal-agent-context-kit
+  format: repo
+  auto-sync: false
 ```
 
 ---

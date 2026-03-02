@@ -173,6 +173,9 @@ ssi codex --teacher codex
   path: https://github.com/user/skill-repo
 ```
 
+Уже добавлено:
+- **Universal Agent Context Kit** — https://github.com/ZhdanDesign/universal-agent-context-kit
+
 ## Примеры использования
 
 ### Новая агентная система
